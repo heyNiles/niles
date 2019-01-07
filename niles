@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+require('dotenv').config();
+const program = require('commander');
+const niles = require('./niles.js');
+
+program
+  .command('*')
+  .action(async (...args) => {
+    const command = args.filter(arg => typeof arg === 'string').join(' ');
+
+    await niles.init();
+    await niles.q(command);
+  });
+
+program.parse(process.argv);
