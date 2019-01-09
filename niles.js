@@ -25,25 +25,31 @@ class Niles {
     }
 
     return {
-      description: `${actionName} on lib ${skillName}`,
-      action: () => action.call(devActions, this.ctx, skillName),
+      action: () => {
+        this.ctx.logger.log(`${actionName} on lib ${skillName}`);
+        action.call(devActions, this.ctx, skillName);
+      },
     };
   }
 
   async translateCommand(command) {
     const rawQueryResults = await Promise.all(
       this.ctx.skills.namespaces().map(model => (async () => {
-        const { data: query } = await axios.post(process.env.NLU_URL, {
-          q: command,
-          project: 'niles',
-          model,
-        });
+        try {
+          const { data: query } = await axios.post(process.env.NLU_URL, {
+            q: command,
+            project: 'niles',
+            model,
+          });
 
-        return query;
+          return query;
+        } catch (error) {
+          return null;
+        }
       })()),
     );
     const queryResults = rawQueryResults
-      .filter(r => r.intent.name)
+      .filter(r => r && r.intent.name)
       .sort((a, b) => {
         if (a.intent.confidence > b.intent.confidence) {
           return -1;
@@ -65,9 +71,21 @@ class Niles {
     return {
       queryResults,
       intent,
-      action: intent ? () => intent.execute(queryResults[0].entities, this.ctx) : null,
-      description: intent ? `Executing ${intent.skill.namespace}.${intent.namespace} (${queryResults[0].intent.confidence})
-          ${queryResults[0].entities.map(entity => `${entity.entity}: ${entity.value} (${entity.confidence})`)}` : null,
+      action: intent ? () => {
+        const { logger } = this.ctx;
+
+        logger.log(logger.chalk.dim('---------------'));
+        logger.log(logger.chalk.dim(
+          `Executing ${intent.skill.namespace}.${intent.namespace} (${queryResults[0].intent.confidence})
+          ${queryResults[0].entities.map(entity => `${entity.entity}: ${entity.value} (${entity.confidence})`)}`,
+        ));
+        logger.log(logger.chalk.dim(`Skipped ${
+          queryResults.slice(1).map(qr => `${qr.intent.name} (${qr.intent.confidence})`).join(', ')
+        }`));
+        logger.log(logger.chalk.dim('---------------\n'));
+
+        intent.execute(queryResults[0].entities, this.ctx);
+      } : null,
     };
   }
 
@@ -87,16 +105,8 @@ class Niles {
       session.interpretedAt = Date.now();
 
       if (!session.action) {
-        logger.log('I\'m afraid I can\'t do that');
+        logger.log('I\'m afraid I can\'t do that, Sir.');
       } else {
-        logger.log(
-          logger.chalk.dim(`\n---------------\nCommand: "${command}"`),
-        );
-        if (session.description) {
-          logger.log(logger.chalk.dim(session.description));
-        }
-        logger.log(logger.chalk.dim('---------------\n'));
-
         session.startedAt = Date.now();
         session.result = await session.action.call(this);
         session.endedAt = Date.now();
