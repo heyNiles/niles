@@ -33,22 +33,48 @@ class Niles {
   }
 
   async translateCommand(command) {
-    const rawQueryResults = await Promise.all(
-      this.ctx.skills.namespaces().map(model => (async () => {
+    const devQueryResults = await Promise.all(
+      this.ctx.skills.devNamespaces().map(model => (async () => {
         try {
-          const { data: query } = await axios.post(process.env.NLU_URL, {
-            q: command,
-            project: 'niles',
-            model,
-          });
+          const { data: query } = await axios.post(
+            process.env.NLU_LOCAL_URL || 'http://localhost:5000/parse',
+            {
+              q: command,
+              project: 'niles',
+              model,
+            },
+          );
 
           return query;
         } catch (error) {
+          const { logger } = this.ctx;
+          logger.warn(logger.chalk.dim.yellow(`Looks like dev server is down... (${error.message})`));
           return null;
         }
       })()),
     );
-    const queryResults = rawQueryResults
+
+    let globalQueryResult;
+
+    try {
+      const { data } = await axios.post(
+        process.env.NLU_GLOBAL_URL || 'http://localhost:5000/parse',
+        {
+          q: command,
+          project: 'niles',
+          model: 'general',
+        },
+      );
+
+      globalQueryResult = data;
+    } catch (error) {
+      const { logger, analytics } = this.ctx;
+      logger.warn(logger.chalk.dim.yellow(`Looks like I can't reach homebase... (${error.message})`));
+      analytics.track('conn_error', { message: error.message });
+    }
+
+    const queryResults = devQueryResults
+      .concat([globalQueryResult])
       .filter(r => r && r.intent.name)
       .sort((a, b) => {
         if (a.intent.confidence > b.intent.confidence) {
@@ -67,14 +93,6 @@ class Niles {
 
     if (queryResults.length > 0) {
       [selectedResult] = queryResults;
-
-      if (queryResults.length > 1 && parseFloat(queryResults[1].intent.confidence) > 0.9) {
-        const runnerUpResult = queryResults[1];
-
-        if (selectedResult.intent.name.startsWith('smalltalk')) {
-          selectedResult = runnerUpResult;
-        }
-      }
 
       intent = this.ctx.skills.getIntent(selectedResult.intent.name);
     }
