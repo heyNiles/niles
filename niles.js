@@ -63,9 +63,20 @@ class Niles {
       });
 
     let intent;
+    let selectedResult;
 
     if (queryResults.length > 0) {
-      intent = this.ctx.skills.getIntent(queryResults[0].intent.name);
+      [selectedResult] = queryResults;
+
+      if (queryResults.length > 1 && parseFloat(queryResults[1].intent.confidence) > 0.9) {
+        const runnerUpResult = queryResults[1];
+
+        if (selectedResult.intent.name.startsWith('smalltalk')) {
+          selectedResult = runnerUpResult;
+        }
+      }
+
+      intent = this.ctx.skills.getIntent(selectedResult.intent.name);
     }
 
     return {
@@ -76,15 +87,17 @@ class Niles {
 
         logger.log(logger.chalk.dim('---------------'));
         logger.log(logger.chalk.dim(
-          `Executing ${intent.skill.namespace}.${intent.namespace} (${queryResults[0].intent.confidence})
-          ${queryResults[0].entities.map(entity => `${entity.entity}: ${entity.value} (${entity.confidence})`)}`,
+          `Executing ${intent.skill.namespace}.${intent.namespace} (${selectedResult.intent.confidence})`,
+        ));
+        logger.log(logger.chalk.dim(
+          `Entities: ${selectedResult.entities.map(entity => `${entity.entity}: ${entity.value} (${entity.confidence})`)}`,
         ));
         logger.log(logger.chalk.dim(`Skipped ${
-          queryResults.slice(1).map(qr => `${qr.intent.name} (${qr.intent.confidence})`).join(', ')
+          queryResults.filter(qr => qr !== selectedResult).map(qr => `${qr.intent.name} (${qr.intent.confidence})`).join(', ')
         }`));
         logger.log(logger.chalk.dim('---------------\n'));
 
-        intent.execute(queryResults[0].entities, this.ctx);
+        intent.execute(selectedResult.entities, this.ctx);
       } : null,
     };
   }
