@@ -140,12 +140,12 @@ class Niles {
       } else {
         session.startedAt = Date.now();
         session.result = await session.action.call(this);
-        session.endedAt = Date.now();
       }
     } catch (error) {
       logger.error(error.message);
       session.error = error;
     } finally {
+      session.endedAt = Date.now();
       session.save();
       session.track();
 
