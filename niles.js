@@ -143,7 +143,7 @@ class Niles {
         session.endedAt = Date.now();
       }
     } catch (error) {
-      logger.error(error);
+      logger.error(error.message);
       session.error = error;
     } finally {
       session.save();
