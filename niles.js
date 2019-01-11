@@ -102,17 +102,17 @@ class Niles {
       action: intent ? () => {
         const { logger } = this.ctx;
 
-        logger.log(logger.chalk.dim('---------------'));
-        logger.log(logger.chalk.dim(
+        logger.trace(logger.chalk.dim('---------------'));
+        logger.trace(logger.chalk.dim(
           `Executing ${intent.skill.namespace}.${intent.namespace} (${selectedResult.intent.confidence})`,
         ));
-        logger.log(logger.chalk.dim(
+        logger.trace(logger.chalk.dim(
           `Entities: ${selectedResult.entities.map(entity => `${entity.entity}: ${entity.value} (${entity.confidence})`)}`,
         ));
-        logger.log(logger.chalk.dim(`Skipped ${
+        logger.trace(logger.chalk.dim(`Skipped ${
           queryResults.filter(qr => qr !== selectedResult).map(qr => `${qr.intent.name} (${qr.intent.confidence})`).join(', ')
         }`));
-        logger.log(logger.chalk.dim('---------------\n'));
+        logger.trace(logger.chalk.dim('---------------\n'));
 
         intent.execute(selectedResult.entities, this.ctx);
       } : null,
