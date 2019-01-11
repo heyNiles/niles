@@ -1,5 +1,3 @@
-const axios = require('axios');
-
 const Context = require('./lib/context');
 const devActions = require('./lib/dev');
 
@@ -33,6 +31,7 @@ class Niles {
   }
 
   async translateCommand(command) {
+    const { axios } = this.ctx;
     const devQueryResults = await Promise.all(
       this.ctx.skills.devNamespaces().map(model => (async () => {
         try {
