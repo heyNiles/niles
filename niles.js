@@ -135,7 +135,7 @@ class Niles {
       session.interpretedAt = Date.now();
 
       if (!session.action) {
-        logger.log('I\'m afraid I can\'t do that, Sir.');
+        logger.log('I\'m afraid I can\'t do that.');
       } else {
         session.startedAt = Date.now();
         session.result = await session.action.call(this);
