@@ -31,61 +31,79 @@ class Niles {
   }
 
   async translateCommand(command) {
-    const { axios } = this.ctx;
-    const devQueryResults = await Promise.all(
-      this.ctx.skills.devNamespaces().map(model => (async () => {
-        try {
-          const { data: query } = await axios.post(
-            process.env.NLU_LOCAL_URL || 'http://localhost:5000/parse',
-            {
-              q: command,
-              project: 'niles',
-              model,
-            },
-          );
+    const { skills } = this.ctx;
+    let queryResults;
 
-          return query;
-        } catch (error) {
-          const { logger } = this.ctx;
-          logger.warn(logger.chalk.dim.yellow(`Looks like dev server is down... (${error.message})`));
-          return null;
-        }
-      })()),
-    );
+    const staticIntent = skills.installed.reduce(
+      (a, skill) => [...a, ...skill.intents],
+      [],
+    ).find(i => i.commands.find(c => c.forms.includes(command)));
 
-    let globalQueryResult;
-
-    try {
-      const { data } = await axios.post(
-        process.env.NLU_GLOBAL_URL || 'http://localhost:5000/parse',
-        {
-          q: command,
-          project: 'niles',
-          model: 'general',
+    if (staticIntent) {
+      queryResults = [{
+        intent: {
+          name: `${staticIntent.skill.namespace}.${staticIntent.namespace}`,
+          confidence: 1,
         },
+        entities: [],
+      }];
+    } else {
+      const { axios } = this.ctx;
+      const devQueryResults = await Promise.all(
+        this.ctx.skills.devNamespaces().map(model => (async () => {
+          try {
+            const { data: query } = await axios.post(
+              process.env.NLU_LOCAL_URL || 'http://localhost:5000/parse',
+              {
+                q: command,
+                project: 'niles',
+                model,
+              },
+            );
+
+            return query;
+          } catch (error) {
+            const { logger } = this.ctx;
+            logger.warn(logger.chalk.dim.yellow(`Looks like dev server is down... (${error.message})`));
+            return null;
+          }
+        })()),
       );
 
-      globalQueryResult = data;
-    } catch (error) {
-      const { logger, analytics } = this.ctx;
-      logger.warn(logger.chalk.dim.yellow(`Looks like I can't reach homebase... (${error.message})`));
-      analytics.track('conn_error', { message: error.message });
+      let globalQueryResult;
+
+      try {
+        const { data } = await axios.post(
+          process.env.NLU_GLOBAL_URL || 'http://localhost:5000/parse',
+          {
+            q: command,
+            project: 'niles',
+            model: 'general',
+          },
+        );
+
+        globalQueryResult = data;
+      } catch (error) {
+        const { logger, analytics } = this.ctx;
+        logger.warn(logger.chalk.dim.yellow(`Looks like I can't reach homebase... (${error.message})`));
+        analytics.track('conn_error', { message: error.message });
+      }
+
+      queryResults = devQueryResults
+        .concat([globalQueryResult])
+        .filter(r => r && r.intent.name)
+        .sort((a, b) => {
+          if (a.intent.confidence > b.intent.confidence) {
+            return -1;
+          }
+
+          if (a.intent.confidence === b.intent.confidence) {
+            return 0;
+          }
+
+          return 1;
+        });
     }
-
-    const queryResults = devQueryResults
-      .concat([globalQueryResult])
-      .filter(r => r && r.intent.name)
-      .sort((a, b) => {
-        if (a.intent.confidence > b.intent.confidence) {
-          return -1;
-        }
-
-        if (a.intent.confidence === b.intent.confidence) {
-          return 0;
-        }
-
-        return 1;
-      });
 
     let intent;
     let selectedResult;
